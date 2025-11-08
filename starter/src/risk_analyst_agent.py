@@ -127,7 +127,8 @@ class RiskAnalystAgent:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=0.3
+                temperature=0.3,
+                max_tokens=1000
             )
 
             content = response.choices[0].message.content
@@ -155,12 +156,13 @@ class RiskAnalystAgent:
                 case_id=case_id,
                 input_data={"case_summary": user_prompt},
                 output_data={},
-                reasoning="Failed to classify case",
+                reasoning="JSON parsing failed",
                 execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
                 success=False,
                 error_message=str(e)
             )
-            raise ValueError("No JSON content found")
+            raise ValueError("Failed to parse Risk Analyst JSON output")
+
 
 
 
@@ -240,18 +242,19 @@ class RiskAnalystAgent:
         ]
         return f"Accounts ({len(accounts)}):\n" + "\n".join(formatted)
 
-
     def _format_transactions(self, transactions: list) -> str:
         """Format transaction details for prompt inclusion"""
         if not transactions:
             return "No transactions available."
 
-        formatted = [
-            f"{i+1}. {t.transaction_date}: {t.transaction_type} ${t.amount:,.2f} — {t.description}"
-            for i, t in enumerate(transactions[:10])
-        ]
-        return f"Transactions ({len(transactions)} shown below, max 10):\n" + "\n".join(formatted)
+        formatted = []
+        for i, t in enumerate(transactions[:10]):
+            line = f"{i+1}. {t.transaction_date}: {t.transaction_type} ${t.amount:,.2f} — {t.description}"
+            if t.location:
+                line += f" @ {t.location}"
+            formatted.append(line)
 
+        return f"Transactions ({len(transactions)} shown below, max 10):\n" + "\n".join(formatted)
 
 # ===== PROMPT ENGINEERING HELPERS =====
 

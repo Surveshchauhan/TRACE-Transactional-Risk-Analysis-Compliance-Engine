@@ -232,7 +232,17 @@ class TestRiskAnalystAgent:
         case = CaseData(
             case_id="CASE_ERROR",
             customer=customer,
-            accounts=[],
+            accounts = [
+            AccountData(
+                account_id="ACC_ERROR", 
+                customer_id="CUST_TEST",
+                account_type="Savings",
+                opening_date="2020-06-01",
+                current_balance=25000.00,
+                average_monthly_balance=20000.00,
+                status="Active"
+            )
+        ],
             transactions=[TransactionData(
                 transaction_id="TXN_ERROR",
                 account_id="ACC_ERROR",
@@ -429,7 +439,17 @@ That completes the analysis.'''
         case = CaseData(
             case_id="CASE_API",
             customer=customer,
-            accounts=[],
+            accounts = [
+            AccountData(
+                account_id="ACC_API", 
+                customer_id="CUST_API",
+                account_type="Savings",
+                opening_date="2020-06-01",
+                current_balance=25000.00,
+                average_monthly_balance=20000.00,
+                status="Active"
+            )
+        ],
             transactions=[TransactionData(
                 transaction_id="TXN_API",
                 account_id="ACC_API",
