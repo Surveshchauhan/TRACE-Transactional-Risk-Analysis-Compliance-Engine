@@ -9,11 +9,7 @@ import json
 import os
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
-
-# Import risk analyst components - these will work once students implement them
-try:
-    from src.risk_analyst_agent import RiskAnalystAgent
-    from src.foundation_sar import (
+from foundation_sar import (
         RiskAnalystOutput,
         ExplainabilityLogger,
         CaseData,
@@ -21,6 +17,18 @@ try:
         AccountData,
         TransactionData
     )
+from risk_analyst_agent import RiskAnalystAgent    
+# Import risk analyst components - these will work once students implement them
+try:
+    # from src.risk_analyst_agent import RiskAnalystAgent
+    # from src.foundation_sar import (
+    #     RiskAnalystOutput,
+    #     ExplainabilityLogger,
+    #     CaseData,
+    #     CustomerData,
+    #     AccountData,
+    #     TransactionData
+    # )
     
     # Test if RiskAnalystAgent is actually implemented (not just empty pass statements)
     try:
@@ -83,7 +91,8 @@ class TestRiskAnalystAgent:
         logger = ExplainabilityLogger("test_risk.jsonl")
         
         agent = RiskAnalystAgent(mock_client, logger, model="gpt-4")
-        
+        print(agent)
+        print(mock_client)
         assert agent.client == mock_client
         assert agent.logger == logger
         assert agent.model == "gpt-4"
@@ -110,6 +119,24 @@ class TestRiskAnalystAgent:
     "risk_level": "High"
 }
 ```'''
+
+#         mock_response.choices[0].message.content = '''```json
+# {
+#   "case_id": "CASE_TEST",
+#   "classification": "Structuring",
+#   "confidence_score": 0.85,
+#   "reasoning": "...",
+#   "key_indicators": [...],
+#   "risk_level": "High",
+#   "analysis": {
+#     "data_review": "...",
+#     "pattern_recognition": "...",
+#     "regulatory_mapping": "...",
+#     "risk_quantification": "...",
+#     "classification_decision": "Structuring"
+#   }
+# }
+# ```'''
         mock_client.chat.completions.create.return_value = mock_response
         
         # Setup logger

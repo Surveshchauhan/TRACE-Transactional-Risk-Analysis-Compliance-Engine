@@ -23,12 +23,12 @@ from typing import Dict, Any, List
 from dotenv import load_dotenv
 
 # TODO: Import your foundation components
-# from foundation_sar import (
-#     ComplianceOfficerOutput,
-#     ExplainabilityLogger, 
-#     CaseData,
-#     RiskAnalystOutput
-# )
+from foundation_sar import (
+    ComplianceOfficerOutput,
+    ExplainabilityLogger, 
+    CaseData,
+    RiskAnalystOutput
+)
 
 # Load environment variables
 load_dotenv()
@@ -53,20 +53,45 @@ class ComplianceOfficerAgent:
             explainability_logger: Logger for audit trails
             model: OpenAI model to use
         """
-        # TODO: Initialize agent components
-        pass
+        self.openai_client = openai_client
+        self.logger = explainability_logger
+        self.model = model
         
         # TODO: Design ReACT system prompt
-        self.system_prompt = """TODO: Create your ReACT system prompt here
-        
-        Key elements to include:
-        - Agent persona as senior compliance officer
-        - ReACT framework: Reasoning Phase + Action Phase
-        - Narrative constraints (≤120 words)
-        - Regulatory terminology requirements
-        - JSON output format specification
-        - BSA/AML compliance focus
-        """
+        self.system_prompt = """You are a Senior Compliance Officer specializing in Anti-Money Laundering (AML) and suspicious activity reporting. Your task is to generate a concise, regulatory-compliant SAR narrative using the ReACT (Reasoning + Action) framework.
+
+            Follow this structured approach:
+
+            REASONING Phase:
+            1. Review the risk analyst's findings
+            2. Assess regulatory narrative requirements
+            3. Identify key compliance elements
+            4. Plan narrative structure
+
+            ACTION Phase:
+            1. Draft a concise SAR narrative (≤120 words)
+            2. Include specific customer details, transaction amounts, and dates
+            3. Reference the suspicious activity pattern
+            4. Use appropriate regulatory language and cite relevant rules
+
+            Your output must follow this JSON format:
+
+            {
+            "case_id": "<string>",
+            "narrative": "<SAR narrative text, ≤120 words>",
+            "word_count": <integer>,
+            "regulatory_citations": ["<citation_1>", "<citation_2>", "..."]
+            }
+
+            Ensure the narrative includes:
+            - Customer identification
+            - Description of suspicious activity
+            - Transaction details
+            - Justification for suspicion
+            - Regulatory terminology and citations (e.g., 31 CFR 1020.320, FinCEN SAR Instructions)
+
+            Be precise, compliant, and audit-ready.
+            """
 
     def generate_compliance_narrative(self, case_data, risk_analysis) -> 'ComplianceOfficerOutput':
         """

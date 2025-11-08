@@ -24,11 +24,13 @@ from dotenv import load_dotenv
 
 # TODO: Import your foundation components
 from foundation_sar import (
-    RiskAnalystOutput, 
-    ExplainabilityLogger, 
-    CaseData
-)
-
+        RiskAnalystOutput,
+        ExplainabilityLogger,
+        CaseData,
+        CustomerData,
+        AccountData,
+        TransactionData
+    )
 # Load environment variables
 load_dotenv()
 
@@ -52,18 +54,18 @@ class RiskAnalystAgent:
             explainability_logger: Logger for audit trails
             model: OpenAI model to use
         """
-        self.openai_client = openai_client
+        self.client = openai_client
         self.logger = explainability_logger
         self.model = model
         self.system_prompt = """
             You are a Senior Financial Crime Risk Analyst specializing in Anti-Money Laundering (AML) investigations. Your task is to analyze suspicious activity using a structured 5-step reasoning framework. Think critically, document your rationale, and produce a clear classification decision.
 
-            Follow this 5-step analysis framework:
+            Follow this 5-step Chain-of-Thought analysis:
 
             1. Data Review – Summarize key customer, account, and transaction details.
             2. Pattern Recognition – Identify suspicious behaviors or typologies.
             3. Regulatory Mapping – Link behavior to AML rules or precedents.
-            4. Risk Quantification – Assess severity based on volume, velocity, geography, and profile.
+            4. Risk Quantification – Assess severity based on volume, velocity, geography, and profile
             5. Classification Decision – Choose one category:
                 "Structuring": "Transactions designed to avoid reporting thresholds",
                 "Sanctions": "Potential sanctions violations or prohibited parties",
@@ -74,18 +76,33 @@ class RiskAnalystAgent:
             Output your reasoning in this JSON format:
 
             {
-            "case_id": "<string>",
-            "analysis": {
-            "data_review": "<summary>",
-            "pattern_recognition": "<suspicious patterns>",
-            "regulatory_mapping": "<AML rules or precedents>",
-            "risk_quantification": "<risk assessment>",
-            "classification_decision": "<Structuring | Sanctions | Fraud | Money_Laundering | Other>"
-                        }
+                "classification": "<string>",
+                "confidence_score": <float between 0 and 1>,
+                "reasoning": "<summary of rationale>",
+                "key_indicators": ["<indicator_1>", "<indicator_2>", "..."],
+                "risk_level": "<Low | Medium | High | Critical>"
             }
+            Limit the reasoning to 500 chracters
+```'''
+
+
         """
 
-
+# {
+#                 "case_id": "<string>",
+#                 "classification": "<Structuring | Sanctions | Fraud | Money_Laundering | Other>",
+#                 "confidence_score": <float between 0 and 1>,
+#                 "reasoning": "<summary of rationale>",
+#                 "key_indicators": ["<indicator_1>", "<indicator_2>", "..."],
+#                 "risk_level": "<Low | Medium | High>",
+#                 "analysis": {
+#                     "data_review": "<summary>",
+#                     "pattern_recognition": "<suspicious patterns>",
+#                     "regulatory_mapping": "<AML rules or precedents>",
+#                     "risk_quantification": "<risk assessment>",
+#                     "classification_decision": "<Structuring | Sanctions | Fraud | Money_Laundering | Other>"
+#                 }
+#             }
     def analyze_case(self, case_data) -> 'RiskAnalystOutput':  # Use quotes for forward reference
         """
         Perform risk analysis on a case using Chain-of-Thought reasoning.
@@ -107,7 +124,7 @@ class RiskAnalystAgent:
                 {"role": "user", "content": user_prompt}
             ]
 
-            response = self.openai_client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.3
@@ -115,10 +132,11 @@ class RiskAnalystAgent:
 
             content = response.choices[0].message.content
             parsed_json = self._extract_json_from_response(content)
+            parsed_json = json.loads(parsed_json)
             output = RiskAnalystOutput(**parsed_json)
 
             self.logger.log_agent_action(
-                agent_type="RiskAnalystAgent",
+                agent_type="RiskAnalyst",
                 action="analyze_case",
                 case_id=case_id,
                 input_data={"case_summary": user_prompt},
@@ -132,7 +150,7 @@ class RiskAnalystAgent:
 
         except Exception as e:
             self.logger.log_agent_action(
-                agent_type="RiskAnalystAgent",
+                agent_type="RiskAnalystS",
                 action="analyze_case",
                 case_id=case_id,
                 input_data={"case_summary": user_prompt},
@@ -142,7 +160,8 @@ class RiskAnalystAgent:
                 success=False,
                 error_message=str(e)
             )
-            raise
+            raise ValueError("No JSON content found")
+
 
 
     def _extract_json_from_response(self, response_content: str) -> str:
@@ -159,9 +178,12 @@ class RiskAnalystAgent:
                 response_content = response_content.split("```json")[1].split("```")[0]
             elif "```" in response_content:
                 response_content = response_content.split("```")[1]
-            return json.loads(response_content.strip())
+            if not response_content.strip():
+                raise ValueError("No JSON content found")
+
+            return response_content.strip()
         except Exception as e:
-            raise ValueError(f"Failed to parse JSON from response: {e}")
+            raise ValueError(f"No JSON content found: {e}")
 
 
     def _format_case_for_prompt(self, case_data) -> str:
@@ -177,24 +199,58 @@ class RiskAnalystAgent:
         accounts = case_data.accounts
         transactions = case_data.transactions
 
+        # Customer profile
         summary = f"""Customer Profile:
-                - ID: {customer.customer_id}
-                - Name: {customer.name}
-                - DOB: {customer.date_of_birth}
-                - Risk Rating: {customer.risk_rating}
-                - Onboarded: {customer.customer_since}
+        - ID: {customer.customer_id}
+        - Name: {customer.name}
+        - DOB: {customer.date_of_birth}
+        - Risk Rating: {customer.risk_rating}
+        - Onboarded: {customer.customer_since}
 
-                Accounts ({len(accounts)}):
-                """ + "\n".join([
-                    f"- {a.account_id} ({a.account_type}, Balance: {a.current_balance}, Status: {a.status})"
-                    for a in accounts
-                ])
+        Accounts ({len(accounts)}):"""
+        for a in accounts:
+            summary += f"\n- {a.account_id} ({a.account_type}, Balance: {a.current_balance}, Status: {a.status})"
 
-                        txn_summary = f"\n\nTransactions ({len(transactions)}):"
-                        for t in transactions[:10]:  # limit for brevity
-                            txn_summary += f"\n- {t.transaction_date}: {t.amount} via {t.method} ({t.transaction_type})"
+        # Transactions
+        txn_summary = f"\n\nTransactions ({len(transactions)} shown below, max 10):"
+        for t in transactions[:10]:
+            txn_summary += f"\n- {t.transaction_date}: {t.amount} via {t.method} ({t.transaction_type})"
 
-        return summary + txn_summary
+        # Financial summary
+        total_balance = sum(a.current_balance for a in accounts)
+        total_txn_volume = sum(t.amount for t in transactions)
+        avg_txn_amount = total_txn_volume / len(transactions) if transactions else 0
+
+        stats = f"""
+    \nFinancial Summary:
+    - Total Account Balance: {total_balance:,.2f}
+    - Total Transaction Volume: {total_txn_volume:,.2f}
+    - Average Transaction Amount: {avg_txn_amount:,.2f}
+    """
+
+        return summary + txn_summary + stats
+    def _format_accounts(self, accounts: list) -> str:
+        """Format account details for prompt inclusion"""
+        if not accounts:
+            return "No accounts available."
+
+        formatted = [
+            f"- {a.account_id}: {a.account_type}, Balance: ${a.current_balance:,.2f}, Status: {a.status}"
+            for a in accounts
+        ]
+        return f"Accounts ({len(accounts)}):\n" + "\n".join(formatted)
+
+
+    def _format_transactions(self, transactions: list) -> str:
+        """Format transaction details for prompt inclusion"""
+        if not transactions:
+            return "No transactions available."
+
+        formatted = [
+            f"{i+1}. {t.transaction_date}: {t.transaction_type} ${t.amount:,.2f} — {t.description}"
+            for i, t in enumerate(transactions[:10])
+        ]
+        return f"Transactions ({len(transactions)} shown below, max 10):\n" + "\n".join(formatted)
 
 
 # ===== PROMPT ENGINEERING HELPERS =====
