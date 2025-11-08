@@ -23,11 +23,11 @@ from typing import Dict, Any, List
 from dotenv import load_dotenv
 
 # TODO: Import your foundation components
-# from foundation_sar import (
-#     RiskAnalystOutput, 
-#     ExplainabilityLogger, 
-#     CaseData
-# )
+from foundation_sar import (
+    RiskAnalystOutput, 
+    ExplainabilityLogger, 
+    CaseData
+)
 
 # Load environment variables
 load_dotenv()
@@ -52,19 +52,39 @@ class RiskAnalystAgent:
             explainability_logger: Logger for audit trails
             model: OpenAI model to use
         """
-        # TODO: Initialize agent components
-        pass
-        
-        # TODO: Design Chain-of-Thought system prompt
-        self.system_prompt = """TODO: Create your Chain-of-Thought system prompt here
-        
-        Key elements to include:
-        - Agent persona as experienced financial crime analyst
-        - Structured reasoning framework (5 steps)
-        - Classification categories (Structuring, Sanctions, Fraud, Money_Laundering, Other)
-        - JSON output format specification
-        - Professional terminology and approach
+        self.openai_client = openai_client
+        self.logger = explainability_logger
+        self.model = model
+        self.system_prompt = """
+            You are a Senior Financial Crime Risk Analyst specializing in Anti-Money Laundering (AML) investigations. Your task is to analyze suspicious activity using a structured 5-step reasoning framework. Think critically, document your rationale, and produce a clear classification decision.
+
+            Follow this 5-step analysis framework:
+
+            1. Data Review – Summarize key customer, account, and transaction details.
+            2. Pattern Recognition – Identify suspicious behaviors or typologies.
+            3. Regulatory Mapping – Link behavior to AML rules or precedents.
+            4. Risk Quantification – Assess severity based on volume, velocity, geography, and profile.
+            5. Classification Decision – Choose one category:
+                "Structuring": "Transactions designed to avoid reporting thresholds",
+                "Sanctions": "Potential sanctions violations or prohibited parties",
+                "Fraud": "Fraudulent transactions or identity-related crimes",
+                "Money_Laundering": "Complex schemes to obscure illicit fund sources", 
+                "Other": "Suspicious patterns not fitting standard categories"
+
+            Output your reasoning in this JSON format:
+
+            {
+            "case_id": "<string>",
+            "analysis": {
+            "data_review": "<summary>",
+            "pattern_recognition": "<suspicious patterns>",
+            "regulatory_mapping": "<AML rules or precedents>",
+            "risk_quantification": "<risk assessment>",
+            "classification_decision": "<Structuring | Sanctions | Fraud | Money_Laundering | Other>"
+                        }
+            }
         """
+
 
     def analyze_case(self, case_data) -> 'RiskAnalystOutput':  # Use quotes for forward reference
         """
@@ -77,7 +97,53 @@ class RiskAnalystAgent:
         - Handles errors and logs operations
         - Returns validated RiskAnalystOutput
         """
-        pass
+        start_time = datetime.now()
+        case_id = case_data.case_id
+
+        try:
+            user_prompt = self._format_case_for_prompt(case_data)
+            messages = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+
+            response = self.openai_client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3
+            )
+
+            content = response.choices[0].message.content
+            parsed_json = self._extract_json_from_response(content)
+            output = RiskAnalystOutput(**parsed_json)
+
+            self.logger.log_agent_action(
+                agent_type="RiskAnalystAgent",
+                action="analyze_case",
+                case_id=case_id,
+                input_data={"case_summary": user_prompt},
+                output_data=parsed_json,
+                reasoning="Chain-of-Thought classification",
+                execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
+                success=True
+            )
+
+            return output
+
+        except Exception as e:
+            self.logger.log_agent_action(
+                agent_type="RiskAnalystAgent",
+                action="analyze_case",
+                case_id=case_id,
+                input_data={"case_summary": user_prompt},
+                output_data={},
+                reasoning="Failed to classify case",
+                execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
+                success=False,
+                error_message=str(e)
+            )
+            raise
+
 
     def _extract_json_from_response(self, response_content: str) -> str:
         """Extract JSON content from LLM response
@@ -88,7 +154,15 @@ class RiskAnalystAgent:
         - Malformed responses
         - Empty responses
         """
-        pass
+        try:
+            if "```json" in response_content:
+                response_content = response_content.split("```json")[1].split("```")[0]
+            elif "```" in response_content:
+                response_content = response_content.split("```")[1]
+            return json.loads(response_content.strip())
+        except Exception as e:
+            raise ValueError(f"Failed to parse JSON from response: {e}")
+
 
     def _format_case_for_prompt(self, case_data) -> str:
         """Format case data for the analysis prompt
@@ -99,7 +173,29 @@ class RiskAnalystAgent:
         - Transaction details with key metrics
         - Financial summary statistics
         """
-        pass
+        customer = case_data.customer
+        accounts = case_data.accounts
+        transactions = case_data.transactions
+
+        summary = f"""Customer Profile:
+                - ID: {customer.customer_id}
+                - Name: {customer.name}
+                - DOB: {customer.date_of_birth}
+                - Risk Rating: {customer.risk_rating}
+                - Onboarded: {customer.customer_since}
+
+                Accounts ({len(accounts)}):
+                """ + "\n".join([
+                    f"- {a.account_id} ({a.account_type}, Balance: {a.current_balance}, Status: {a.status})"
+                    for a in accounts
+                ])
+
+                        txn_summary = f"\n\nTransactions ({len(transactions)}):"
+                        for t in transactions[:10]:  # limit for brevity
+                            txn_summary += f"\n- {t.transaction_date}: {t.amount} via {t.method} ({t.transaction_type})"
+
+        return summary + txn_summary
+
 
 # ===== PROMPT ENGINEERING HELPERS =====
 
